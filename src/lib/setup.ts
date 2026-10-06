@@ -1,5 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
-import Anthropic from "@anthropic-ai/sdk";
+import { anthropicClient } from "./anthropic.ts";
 import { describeAnthropicError } from "./api-error.ts";
 import { normaliseSupabaseUrl } from "./supabase-url.ts";
 
@@ -90,7 +90,7 @@ export async function runSetupChecks(): Promise<SetupItem[]> {
     const model = ANTHROPIC_MODEL || "claude-opus-5-5";
     try {
       // Token counting is free, so it verifies the key and the model name without spending credit.
-      await new Anthropic().messages.countTokens({ model, messages: [{ role: "user", content: "ping" }] });
+      await anthropicClient().messages.countTokens({ model, messages: [{ role: "user", content: "ping" }] });
       items.push({ name: "Claude evaluation", state: "ok", detail: `Key and model verified. Model: ${model}.` });
     } catch (e) {
       const msg = describeAnthropicError(e);
@@ -101,7 +101,9 @@ export async function runSetupChecks(): Promise<SetupItem[]> {
         detail: `Anthropic rejected the request (${msg}).`,
         fix: badModel
           ? `ANTHROPIC_MODEL "${model}" is not a valid model id. Use claude-haiku-4-5, claude-sonnet-5-5 or claude-opus-5-5, or remove the variable.`
-          : /401|authentication/i.test(msg)
+          : /workspace/i.test(msg)
+            ? "This key was created outside a workspace. Either add ANTHROPIC_WORKSPACE_ID in Vercel (Settings → Workspaces at console.anthropic.com, copy the ID starting with wrkspc_), or create a new key inside a workspace and use that as ANTHROPIC_API_KEY. Then redeploy."
+            : /401|authentication/i.test(msg)
             ? "The API key is wrong or revoked. Create a new one at console.anthropic.com and update ANTHROPIC_API_KEY."
             : /credit|billing|402/i.test(msg)
               ? "The Anthropic account has no credit. Add credit under Billing at console.anthropic.com."

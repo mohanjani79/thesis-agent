@@ -1,4 +1,4 @@
-import Anthropic from "@anthropic-ai/sdk";
+import { anthropicClient } from "./anthropic.ts";
 import { z } from "zod";
 import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod";
 import type { Agent, NewsItem, PillarResult, Quote } from "./types.ts";
@@ -100,7 +100,7 @@ export async function evaluateThesis(agent: Agent, quotes: Quote[], news: NewsIt
     return { pillars: [], summary: "No assumptions to check yet. Add the pillars your thesis rests on.", evaluator: MODEL, guardFlags: [] };
   }
 
-  const client = new Anthropic();
+  const client = anthropicClient();
   const modern = supportsEffort(MODEL);
   let response;
   try {

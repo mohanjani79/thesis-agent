@@ -23,7 +23,8 @@ npm run dev
 With no keys set the app pulls real NSE prices from Yahoo Finance and headlines from Google News (both keyless,
 unofficial feeds; simulated prices fill in if Yahoo is unreachable), and skips the Claude evaluation (status shows
 `rules-only`). Add `ANTHROPIC_API_KEY` to get real assumption checks; set `ANTHROPIC_MODEL=claude-haiku-4-5` for a
-cheaper daily run. `MARKET_PROVIDER=mock` switches to fully simulated data.
+cheaper daily run. A key created at organisation level (outside a workspace) also needs `ANTHROPIC_WORKSPACE_ID`.
+`MARKET_PROVIDER=mock` switches to fully simulated data.
 
 ```bash
 npm test          # unit tests for rules, status, advice guard, form parsing
