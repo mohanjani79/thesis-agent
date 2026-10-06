@@ -9,8 +9,9 @@ export const dynamic = "force-dynamic";
 const KIND_LABEL = { price_below: "below", price_above: "above", drop_from_entry_pct: "drop", note: "note" } as const;
 const VERDICT_LABEL = { supported: "Supported", challenged: "Challenged", no_signal: "No signal" } as const;
 
-export default async function AgentPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function AgentPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ error?: string }> }) {
   const { id } = await params;
+  const { error } = await searchParams;
   const store = getStore();
   const agent = await store.getAgent(id);
   if (!agent) notFound();
@@ -50,6 +51,12 @@ export default async function AgentPage({ params }: { params: Promise<{ id: stri
           </form>
         </div>
       </div>
+
+      {error && (
+        <div className="form-error" style={{ marginBottom: 16 }}>
+          The check could not be completed: {error} <Link href="/setup">Open setup check</Link>
+        </div>
+      )}
 
       {latest ? (
         <div className="grid-2">

@@ -3,6 +3,7 @@ import { z } from "zod";
 import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod";
 import type { Agent, NewsItem, PillarResult, Quote } from "./types.ts";
 import { guardAdvice } from "./guard.ts";
+import { describeAnthropicError } from "./api-error.ts";
 
 // ANTHROPIC_MODEL lets the daily run use a cheaper model such as claude-haiku-4-5.
 export const MODEL = process.env.ANTHROPIC_MODEL || "claude-opus-5-5";
@@ -81,6 +82,18 @@ function rulesOnlyEvaluation(agent: Agent, news: NewsItem[]): Evaluation {
   };
 }
 
+/** Effort levels and server-side fallbacks exist on the Claude 5 / Fable families; Haiku 4.5 rejects both. */
+const supportsEffort = (model: string) => /claude-(opus|sonnet|fable|mythos)-5/.test(model);
+
+function evaluationFailed(agent: Agent, message: string): Evaluation {
+  return {
+    pillars: agent.assumptions.map((assumption) => ({ assumption, verdict: "no_signal", evidence: "Not checked this run." })),
+    summary: `The Claude evaluation failed, so only your price rules were checked. ${message}`,
+    evaluator: `${MODEL} (failed)`,
+    guardFlags: [],
+  };
+}
+
 export async function evaluateThesis(agent: Agent, quotes: Quote[], news: NewsItem[]): Promise<Evaluation> {
   if (!process.env.ANTHROPIC_API_KEY) return rulesOnlyEvaluation(agent, news);
   if (agent.assumptions.length === 0) {
@@ -88,15 +101,20 @@ export async function evaluateThesis(agent: Agent, quotes: Quote[], news: NewsIt
   }
 
   const client = new Anthropic();
-  const response = await client.beta.messages.parse({
-    model: MODEL,
-    max_tokens: 4096,
-    system: [{ type: "text", text: SYSTEM, cache_control: { type: "ephemeral" } }],
-    messages: [{ role: "user", content: buildPrompt(agent, quotes, news) }],
-    output_config: { effort: "medium", format: betaZodOutputFormat(EvaluationSchema) },
-    betas: ["server-side-fallback-2026-07-01"],
-    fallbacks: "default",
-  });
+  const modern = supportsEffort(MODEL);
+  let response;
+  try {
+    response = await client.beta.messages.parse({
+      model: MODEL,
+      max_tokens: 4096,
+      system: [{ type: "text", text: SYSTEM, cache_control: { type: "ephemeral" } }],
+      messages: [{ role: "user", content: buildPrompt(agent, quotes, news) }],
+      output_config: modern ? { effort: "medium", format: betaZodOutputFormat(EvaluationSchema) } : { format: betaZodOutputFormat(EvaluationSchema) },
+      ...(modern ? { betas: ["server-side-fallback-2026-07-01"], fallbacks: "default" } : {}),
+    });
+  } catch (e) {
+    return evaluationFailed(agent, describeAnthropicError(e));
+  }
 
   if (response.stop_reason === "refusal" || !response.parsed_output) {
     return {

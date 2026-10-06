@@ -1,4 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
+import Anthropic from "@anthropic-ai/sdk";
+import { describeAnthropicError } from "./api-error.ts";
 import { normaliseSupabaseUrl } from "./supabase-url.ts";
 
 export type CheckState = "ok" | "warn" | "fail";
@@ -85,7 +87,27 @@ export async function runSetupChecks(): Promise<SetupItem[]> {
   } else if (!ANTHROPIC_API_KEY.startsWith("sk-ant-")) {
     items.push({ name: "Claude evaluation", state: "fail", detail: "ANTHROPIC_API_KEY is set but does not look like an Anthropic key (they start with sk-ant-).", fix: "Re-copy the key from console.anthropic.com." });
   } else {
-    items.push({ name: "Claude evaluation", state: "ok", detail: `Key present. Model: ${ANTHROPIC_MODEL || "claude-opus-5-5"}.` });
+    const model = ANTHROPIC_MODEL || "claude-opus-5-5";
+    try {
+      // Token counting is free, so it verifies the key and the model name without spending credit.
+      await new Anthropic().messages.countTokens({ model, messages: [{ role: "user", content: "ping" }] });
+      items.push({ name: "Claude evaluation", state: "ok", detail: `Key and model verified. Model: ${model}.` });
+    } catch (e) {
+      const msg = describeAnthropicError(e);
+      const badModel = /model/i.test(msg) && /not found|invalid|unknown/i.test(msg);
+      items.push({
+        name: "Claude evaluation",
+        state: "fail",
+        detail: `Anthropic rejected the request (${msg}).`,
+        fix: badModel
+          ? `ANTHROPIC_MODEL "${model}" is not a valid model id. Use claude-haiku-4-5, claude-sonnet-5-5 or claude-opus-5-5, or remove the variable.`
+          : /401|authentication/i.test(msg)
+            ? "The API key is wrong or revoked. Create a new one at console.anthropic.com and update ANTHROPIC_API_KEY."
+            : /credit|billing|402/i.test(msg)
+              ? "The Anthropic account has no credit. Add credit under Billing at console.anthropic.com."
+              : "Check the key and model in Vercel, then redeploy.",
+      });
+    }
   }
 
   // Market data

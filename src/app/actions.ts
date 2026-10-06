@@ -29,7 +29,13 @@ export async function deleteAgentAction(id: string) {
 
 export async function checkNowAction(id: string) {
   const agent = await getStore().getAgent(id);
-  if (agent) await runCheck(agent);
+  if (!agent) redirect("/");
+  try {
+    await runCheck(agent);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    redirect(`/agents/${id}?error=${encodeURIComponent(msg)}`);
+  }
   revalidatePath(`/agents/${id}`);
   revalidatePath("/");
 }
@@ -56,7 +62,12 @@ export async function createExampleAction() {
     ],
     entryPrices: { INFY: 1540 },
   });
-  await runCheck(agent);
+  try {
+    await runCheck(agent);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    redirect(`/agents/${agent.id}?error=${encodeURIComponent(msg)}`);
+  }
   revalidatePath("/");
   redirect(`/agents/${agent.id}`);
 }
