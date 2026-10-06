@@ -20,8 +20,10 @@ cp .env.example .env.local   # fill in what you have; everything is optional
 npm run dev
 ```
 
-With no keys set the app runs fully on simulated prices, holdings and news, and skips the Claude evaluation
-(status shows `rules-only`). Add `ANTHROPIC_API_KEY` to get real assumption checks.
+With no keys set the app pulls real NSE prices from Yahoo Finance and headlines from Google News (both keyless,
+unofficial feeds; simulated prices fill in if Yahoo is unreachable), and skips the Claude evaluation (status shows
+`rules-only`). Add `ANTHROPIC_API_KEY` to get real assumption checks; set `ANTHROPIC_MODEL=claude-haiku-4-5` for a
+cheaper daily run. `MARKET_PROVIDER=mock` switches to fully simulated data.
 
 ```bash
 npm test          # unit tests for rules, status, advice guard, form parsing
@@ -40,7 +42,7 @@ npm run typecheck
 
 Set `KITE_API_KEY` and `KITE_ACCESS_TOKEN` to read live quotes and holdings from Kite Connect. The access token is
 issued by Kite's login flow and expires daily; automating that refresh is the next step. Kite has no news feed, so
-news stays simulated until a news source is chosen.
+news comes from Google News.
 
 ## Layout
 
@@ -48,6 +50,6 @@ news stays simulated until a news source is chosen.
 - `src/lib/rules.ts`, `status.ts` – deterministic rule evaluation and status
 - `src/lib/evaluate.ts` – Claude evaluation of each assumption, structured output
 - `src/lib/guard.ts` – advice filter
-- `src/lib/market.ts` – market provider (mock, Kite)
+- `src/lib/market.ts`, `free.ts` – market providers (free Yahoo/Google News, mock, Kite)
 - `src/lib/store.ts` – storage (Supabase, local JSON)
 - `src/app/` – pages and API routes; `api/cron/check` is the scheduled run

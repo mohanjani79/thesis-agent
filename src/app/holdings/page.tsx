@@ -10,8 +10,12 @@ export default async function Holdings() {
     <>
       <h1>Holdings</h1>
       <p className="muted">
-        Read-only view from {market.name === "kite" ? "Zerodha Kite" : "simulated data (connect Zerodha to see your own)"}.
+        {market.name === "kite" && "Read-only view from Zerodha Kite."}
+        {market.name === "mock" && "Simulated holdings. Connect Zerodha to see your own."}
+        {market.name === "free" && "No broker connected. Add Zerodha Kite keys to see your holdings here (read-only)."}
       </p>
+      {holdings.length === 0 && <div className="card muted">Nothing to show yet.</div>}
+      {holdings.length > 0 && (
       <div className="card">
         <table>
           <thead>
@@ -41,6 +45,7 @@ export default async function Holdings() {
           </tbody>
         </table>
       </div>
+      )}
     </>
   );
 }

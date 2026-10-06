@@ -40,6 +40,8 @@ export interface Quote {
   lastPrice: number;
   changePct: number;
   asOf: string;
+  /** Where the price came from; absent on older records. */
+  source?: "yahoo" | "kite" | "mock";
 }
 
 export interface NewsItem {

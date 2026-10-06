@@ -4,7 +4,8 @@ import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod";
 import type { Agent, NewsItem, PillarResult, Quote } from "./types.ts";
 import { guardAdvice } from "./guard.ts";
 
-export const MODEL = "claude-opus-5-5";
+// ANTHROPIC_MODEL lets the daily run use a cheaper model such as claude-haiku-4-5.
+export const MODEL = process.env.ANTHROPIC_MODEL || "claude-opus-5-5";
 
 const PillarSchema = z.object({
   assumption: z.string(),

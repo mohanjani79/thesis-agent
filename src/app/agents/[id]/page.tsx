@@ -89,7 +89,8 @@ export default async function AgentPage({ params }: { params: Promise<{ id: stri
                     {q.changePct >= 0 ? "+" : ""}
                     {q.changePct.toFixed(2)}%
                   </td>
-                  {agent.entryPrices[q.symbol] && <td className="num muted">entry {inr(agent.entryPrices[q.symbol])}</td>}
+                  <td className="num muted">{agent.entryPrices[q.symbol] ? `entry ${inr(agent.entryPrices[q.symbol])}` : ""}</td>
+                  <td className="muted">{q.source === "mock" ? "simulated" : q.source ?? ""}</td>
                 </tr>
               ))}
             </tbody>

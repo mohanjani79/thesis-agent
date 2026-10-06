@@ -1,4 +1,5 @@
 import type { Holding, NewsItem, Quote } from "./types.ts";
+import { FreeProvider } from "./free.ts";
 
 // Market data comes through one interface so the mock can be swapped for
 // Zerodha Kite Connect by setting KITE_API_KEY and KITE_ACCESS_TOKEN.
@@ -96,7 +97,7 @@ export class MockProvider implements MarketProvider {
     const day = new Date().toISOString().slice(0, 10);
     return symbols.map((symbol) => {
       const { price, changePct } = mockPrice(symbol, day);
-      return { symbol, lastPrice: price, changePct, asOf: new Date().toISOString() };
+      return { symbol, lastPrice: price, changePct, asOf: new Date().toISOString(), source: "mock" };
     });
   }
 
@@ -119,11 +120,11 @@ export class MockProvider implements MarketProvider {
 /**
  * Zerodha Kite Connect v3, read-only endpoints only (quote, portfolio/holdings).
  * The access token is issued by Kite's daily login flow and expires each day.
- * Kite has no news API, so news still comes from the mock until a news source is chosen.
+ * Kite has no news API, so news comes from the free Google News feed.
  */
 export class KiteProvider implements MarketProvider {
   name = "kite";
-  private mock = new MockProvider();
+  private news_ = new FreeProvider();
 
   constructor(
     private apiKey: string,
@@ -148,7 +149,7 @@ export class KiteProvider implements MarketProvider {
       const d = data[`${this.exchange}:${symbol}`];
       if (!d) return [];
       const prevClose = d.ohlc?.close || d.last_price;
-      return [{ symbol, lastPrice: d.last_price, changePct: ((d.last_price - prevClose) / prevClose) * 100, asOf: d.timestamp }];
+      return [{ symbol, lastPrice: d.last_price, changePct: ((d.last_price - prevClose) / prevClose) * 100, asOf: d.timestamp, source: "kite" }];
     });
   }
 
@@ -158,12 +159,18 @@ export class KiteProvider implements MarketProvider {
   }
 
   async news(symbols: string[]): Promise<NewsItem[]> {
-    return this.mock.news(symbols);
+    return this.news_.news(symbols);
   }
 }
 
+/**
+ * MARKET_PROVIDER picks the source: "kite" (needs keys), "mock", or "free"
+ * (default: keyless Yahoo quotes and Google News, mock prices as a fallback).
+ */
 export function getMarketProvider(): MarketProvider {
-  const { KITE_API_KEY, KITE_ACCESS_TOKEN } = process.env;
-  if (KITE_API_KEY && KITE_ACCESS_TOKEN) return new KiteProvider(KITE_API_KEY, KITE_ACCESS_TOKEN);
-  return new MockProvider();
+  const { KITE_API_KEY, KITE_ACCESS_TOKEN, MARKET_PROVIDER } = process.env;
+  const choice = MARKET_PROVIDER ?? (KITE_API_KEY && KITE_ACCESS_TOKEN ? "kite" : "free");
+  if (choice === "kite" && KITE_API_KEY && KITE_ACCESS_TOKEN) return new KiteProvider(KITE_API_KEY, KITE_ACCESS_TOKEN);
+  if (choice === "mock") return new MockProvider();
+  return new FreeProvider(new MockProvider());
 }
