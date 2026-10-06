@@ -2,7 +2,7 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import type { Agent, AgentInput, Check } from "./types.ts";
+import type { Account, AccountRole, Agent, AgentInput, Check } from "./types.ts";
 import { normaliseSupabaseUrl } from "./supabase-url.ts";
 
 // Storage: Supabase when SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are set,
@@ -10,19 +10,28 @@ import { normaliseSupabaseUrl } from "./supabase-url.ts";
 // system is not persistent, so a deployed app needs Supabase.
 
 export interface Store {
-  listAgents(): Promise<Agent[]>;
+  /** All agents when accountId is omitted (the cron uses this), else one person's. */
+  listAgents(accountId?: string): Promise<Agent[]>;
   getAgent(id: string): Promise<Agent | null>;
-  createAgent(input: AgentInput): Promise<Agent>;
+  createAgent(input: AgentInput, accountId: string): Promise<Agent>;
   updateAgent(id: string, input: AgentInput): Promise<Agent | null>;
   deleteAgent(id: string): Promise<void>;
   addCheck(check: Omit<Check, "id">): Promise<Check>;
   listChecks(agentId: string, limit?: number): Promise<Check[]>;
-  latestChecks(): Promise<Record<string, Check>>;
+  latestChecks(accountId?: string): Promise<Record<string, Check>>;
+
+  listAccounts(): Promise<Account[]>;
+  getAccountByToken(token: string): Promise<Account | null>;
+  createAccount(name: string, role: AccountRole, token: string): Promise<Account>;
+  deleteAccount(id: string): Promise<void>;
+  /** Gives agents created before accounts existed to this account. */
+  adoptUnownedAgents(accountId: string): Promise<number>;
 }
 
 interface Db {
   agents: Agent[];
   checks: Check[];
+  accounts?: Account[];
 }
 
 class FileStore implements Store {
@@ -41,18 +50,19 @@ class FileStore implements Store {
     await fs.writeFile(this.file, JSON.stringify(db, null, 2));
   }
 
-  async listAgents() {
-    return (await this.read()).agents.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  async listAgents(accountId?: string) {
+    const agents = (await this.read()).agents.filter((a) => !accountId || a.accountId === accountId);
+    return agents.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
   }
 
   async getAgent(id: string) {
     return (await this.read()).agents.find((a) => a.id === id) ?? null;
   }
 
-  async createAgent(input: AgentInput) {
+  async createAgent(input: AgentInput, accountId: string) {
     const db = await this.read();
     const now = new Date().toISOString();
-    const agent: Agent = { ...input, id: randomUUID(), createdAt: now, updatedAt: now };
+    const agent: Agent = { ...input, id: randomUUID(), accountId, createdAt: now, updatedAt: now };
     db.agents.push(agent);
     await this.write(db);
     return agent;
@@ -69,7 +79,7 @@ class FileStore implements Store {
 
   async deleteAgent(id: string) {
     const db = await this.read();
-    await this.write({ agents: db.agents.filter((a) => a.id !== id), checks: db.checks.filter((c) => c.agentId !== id) });
+    await this.write({ ...db, agents: db.agents.filter((a) => a.id !== id), checks: db.checks.filter((c) => c.agentId !== id) });
   }
 
   async addCheck(input: Omit<Check, "id">) {
@@ -87,18 +97,56 @@ class FileStore implements Store {
       .slice(0, limit);
   }
 
-  async latestChecks() {
+  async latestChecks(accountId?: string) {
+    const db = await this.read();
+    const mine = new Set(db.agents.filter((a) => !accountId || a.accountId === accountId).map((a) => a.id));
     const out: Record<string, Check> = {};
-    for (const c of (await this.read()).checks) {
+    for (const c of db.checks) {
+      if (!mine.has(c.agentId)) continue;
       if (!out[c.agentId] || out[c.agentId].ranAt < c.ranAt) out[c.agentId] = c;
     }
     return out;
+  }
+
+  async listAccounts() {
+    return [...((await this.read()).accounts ?? [])].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  }
+
+  async getAccountByToken(token: string) {
+    return ((await this.read()).accounts ?? []).find((a) => a.token === token) ?? null;
+  }
+
+  async createAccount(name: string, role: AccountRole, token: string) {
+    const db = await this.read();
+    const account: Account = { id: randomUUID(), name, role, token, createdAt: new Date().toISOString() };
+    db.accounts = [...(db.accounts ?? []), account];
+    await this.write(db);
+    return account;
+  }
+
+  async deleteAccount(id: string) {
+    const db = await this.read();
+    const gone = new Set(db.agents.filter((a) => a.accountId === id).map((a) => a.id));
+    await this.write({
+      accounts: (db.accounts ?? []).filter((a) => a.id !== id),
+      agents: db.agents.filter((a) => !gone.has(a.id)),
+      checks: db.checks.filter((c) => !gone.has(c.agentId)),
+    });
+  }
+
+  async adoptUnownedAgents(accountId: string) {
+    const db = await this.read();
+    let n = 0;
+    for (const a of db.agents) if (!a.accountId) (a.accountId = accountId), n++;
+    if (n) await this.write(db);
+    return n;
   }
 }
 
 // Supabase rows use snake_case columns; see supabase/migrations/0001_init.sql.
 type AgentRow = {
   id: string;
+  account_id: string | null;
   name: string;
   symbols: string[];
   thesis: string;
@@ -113,6 +161,7 @@ type AgentRow = {
 
 const fromAgentRow = (r: AgentRow): Agent => ({
   id: r.id,
+  accountId: r.account_id ?? undefined,
   name: r.name,
   symbols: r.symbols,
   thesis: r.thesis,
@@ -172,8 +221,10 @@ class SupabaseStore implements Store {
     return res.data;
   }
 
-  async listAgents() {
-    const rows = this.must(await this.db.from("agents").select("*").order("updated_at", { ascending: false }));
+  async listAgents(accountId?: string) {
+    let q = this.db.from("agents").select("*").order("updated_at", { ascending: false });
+    if (accountId) q = q.eq("account_id", accountId);
+    const rows = this.must(await q);
     return (rows as AgentRow[]).map(fromAgentRow);
   }
 
@@ -182,8 +233,8 @@ class SupabaseStore implements Store {
     return row ? fromAgentRow(row as unknown as AgentRow) : null;
   }
 
-  async createAgent(input: AgentInput) {
-    const row = this.must(await this.db.from("agents").insert(toAgentRow(input)).select().single());
+  async createAgent(input: AgentInput, accountId: string) {
+    const row = this.must(await this.db.from("agents").insert({ ...toAgentRow(input), account_id: accountId }).select().single());
     return fromAgentRow(row as unknown as AgentRow);
   }
 
@@ -225,11 +276,45 @@ class SupabaseStore implements Store {
     return (rows as CheckRow[]).map(fromCheckRow);
   }
 
-  async latestChecks() {
-    const rows = this.must(await this.db.from("latest_checks").select("*"));
+  async latestChecks(accountId?: string) {
+    let q = this.db.from("latest_checks").select("*");
+    if (accountId) {
+      const ids = (await this.listAgents(accountId)).map((a) => a.id);
+      if (ids.length === 0) return {};
+      q = q.in("agent_id", ids);
+    }
+    const rows = this.must(await q);
     return Object.fromEntries((rows as CheckRow[]).map((r) => [r.agent_id, fromCheckRow(r)]));
   }
+
+  async listAccounts() {
+    const rows = this.must(await this.db.from("accounts").select("*").order("created_at", { ascending: true }));
+    return (rows as AccountRow[]).map(fromAccountRow);
+  }
+
+  async getAccountByToken(token: string) {
+    const row = this.must(await this.db.from("accounts").select("*").eq("token", token).maybeSingle());
+    return row ? fromAccountRow(row as unknown as AccountRow) : null;
+  }
+
+  async createAccount(name: string, role: AccountRole, token: string) {
+    const row = this.must(await this.db.from("accounts").insert({ name, role, token }).select().single());
+    return fromAccountRow(row as unknown as AccountRow);
+  }
+
+  async deleteAccount(id: string) {
+    // agents.account_id cascades, and checks cascade from agents.
+    this.must(await this.db.from("accounts").delete().eq("id", id));
+  }
+
+  async adoptUnownedAgents(accountId: string) {
+    const rows = this.must(await this.db.from("agents").update({ account_id: accountId }).is("account_id", null).select("id"));
+    return (rows as { id: string }[]).length;
+  }
 }
+
+type AccountRow = { id: string; name: string; token: string; role: AccountRole; created_at: string };
+const fromAccountRow = (r: AccountRow): Account => ({ id: r.id, name: r.name, token: r.token, role: r.role, createdAt: r.created_at });
 
 let store: Store | undefined;
 

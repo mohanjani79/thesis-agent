@@ -26,6 +26,15 @@ unofficial feeds; simulated prices fill in if Yahoo is unreachable), and skips t
 cheaper daily run. A key created at organisation level (outside a workspace) also needs `ANTHROPIC_WORKSPACE_ID`.
 `MARKET_PROVIDER=mock` switches to fully simulated data.
 
+## Sign-in and friends
+
+Access is by personal link, so nothing has to send email. The first visitor to `/welcome` claims the
+workspace and becomes the owner; any agents created before that become theirs. The owner's **Members**
+page creates an invite link per friend (`/join/<token>`); opening it signs that browser in for a year,
+and each person sees only their own agents. Removing a member deletes their agents. The REST API accepts
+the same token as `Authorization: Bearer <token>`. Deployed instances need
+`supabase/migrations/0002_accounts.sql` applied once.
+
 ```bash
 npm test          # unit tests for rules, status, advice guard, form parsing
 npm run typecheck

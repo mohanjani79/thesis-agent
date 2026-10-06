@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { getStore } from "@/lib/store";
+import { requireAccount } from "@/lib/auth";
 import { saveAgentAction } from "@/app/actions";
 import { AgentForm } from "../../form";
 
@@ -9,8 +10,9 @@ export const maxDuration = 60;
 
 export default async function EditAgent({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  const account = await requireAccount();
   const agent = await getStore().getAgent(id);
-  if (!agent) notFound();
+  if (!agent || agent.accountId !== account.id) notFound();
   const action = saveAgentAction.bind(null, id);
   return (
     <>

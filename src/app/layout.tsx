@@ -1,13 +1,16 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import "./globals.css";
+import { currentAccount } from "@/lib/auth";
+import { signOutAction } from "./actions";
 
 export const metadata: Metadata = {
   title: "Thesis Agent",
   description: "Keep your own investment thesis honest. Not investment advice.",
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  const account = await currentAccount();
   return (
     <html lang="en">
       <head>
@@ -25,14 +28,25 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               Thesis Agent
             </Link>
             <nav className="topnav">
-              <Link href="/">Agents</Link>
-              <Link href="/holdings">Holdings</Link>
-              <Link href="/setup">Setup</Link>
+              {account && <Link href="/">Agents</Link>}
+              {account && <Link href="/holdings">Holdings</Link>}
+              {account?.role === "owner" && <Link href="/members">Members</Link>}
+              {(!account || account.role === "owner") && <Link href="/setup">Setup</Link>}
             </nav>
             <span className="spacer" />
-            <Link href="/agents/new" className="btn">
-              New agent
-            </Link>
+            {account ? (
+              <>
+                <span className="small muted">{account.name}</span>
+                <form action={signOutAction}>
+                  <button type="submit" className="btn quiet">
+                    Sign out
+                  </button>
+                </form>
+                <Link href="/agents/new" className="btn">
+                  New agent
+                </Link>
+              </>
+            ) : null}
           </div>
         </header>
         <main>{children}</main>

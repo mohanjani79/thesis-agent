@@ -1,9 +1,11 @@
 import { getMarketProvider } from "@/lib/market";
 import { inr, pct } from "../ui";
+import { requireAccount } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
 export default async function Holdings() {
+  await requireAccount();
   const market = getMarketProvider();
   const holdings = await market.holdings();
   const note =

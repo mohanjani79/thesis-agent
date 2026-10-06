@@ -15,8 +15,21 @@ export interface Rule {
   text: string;
 }
 
+export type AccountRole = "owner" | "member";
+
+/** A person using the app. They sign in with a personal link carrying `token`. */
+export interface Account {
+  id: string;
+  name: string;
+  token: string;
+  role: AccountRole;
+  createdAt: string;
+}
+
 export interface Agent {
   id: string;
+  /** Owner of this agent; missing only on rows created before accounts existed. */
+  accountId?: string;
   name: string;
   symbols: string[];
   /** The thesis in the user's words. */
@@ -33,7 +46,7 @@ export interface Agent {
   updatedAt: string;
 }
 
-export type AgentInput = Omit<Agent, "id" | "createdAt" | "updatedAt">;
+export type AgentInput = Omit<Agent, "id" | "accountId" | "createdAt" | "updatedAt">;
 
 export interface Quote {
   symbol: string;

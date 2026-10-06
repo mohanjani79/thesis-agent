@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getStore } from "@/lib/store";
+import { requireAccount } from "@/lib/auth";
 import { checkNowAction, deleteAgentAction } from "@/app/actions";
 import { StatusPill, STATUS_LABEL, inr, pct, timeAgo } from "@/app/ui";
 
@@ -14,9 +15,10 @@ const VERDICT_LABEL = { supported: "Supported", challenged: "Challenged", no_sig
 export default async function AgentPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ error?: string }> }) {
   const { id } = await params;
   const { error } = await searchParams;
+  const account = await requireAccount();
   const store = getStore();
   const agent = await store.getAgent(id);
-  if (!agent) notFound();
+  if (!agent || agent.accountId !== account.id) notFound();
   const checks = await store.listChecks(id, 10);
   const latest = checks[0];
   const check = checkNowAction.bind(null, id);

@@ -1,3 +1,4 @@
+import { getStore } from "./store.ts";
 import { createClient } from "@supabase/supabase-js";
 import { anthropicClient } from "./anthropic.ts";
 import { describeAnthropicError } from "./api-error.ts";
@@ -114,6 +115,22 @@ export async function runSetupChecks(): Promise<SetupItem[]> {
 
   // Market data
   const provider = MARKET_PROVIDER ?? (KITE_API_KEY && KITE_ACCESS_TOKEN ? "kite" : "free");
+  try {
+    const accounts = await getStore().listAccounts();
+    items.push(
+      accounts.length === 0
+        ? { name: "Sign-in", state: "warn", detail: "No one has claimed the workspace yet. The first visitor to /welcome becomes the owner.", fix: "Open /welcome and claim it before sharing the site." }
+        : { name: "Sign-in", state: "ok", detail: `${accounts.length} account(s). The owner invites friends from the Members page.` },
+    );
+  } catch (e) {
+    items.push({
+      name: "Sign-in",
+      state: "fail",
+      detail: `The accounts table is missing or unreachable (${e instanceof Error ? e.message : String(e)}).`,
+      fix: "Run supabase/migrations/0002_accounts.sql in the Supabase SQL editor, then reload.",
+    });
+  }
+
   items.push({
     name: "Market data",
     state: provider === "mock" ? "warn" : "ok",

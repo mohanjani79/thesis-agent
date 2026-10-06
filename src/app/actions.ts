@@ -5,6 +5,15 @@ import { revalidatePath } from "next/cache";
 import { getStore } from "@/lib/store";
 import { runCheck } from "@/lib/check";
 import { formToAgentInput, parseAgentInput } from "@/lib/validate";
+import { clearSession, currentAccount, newToken, requireAccount, requireOwner, setSession } from "@/lib/auth";
+import type { Agent } from "@/lib/types";
+
+/** Loads an agent only if it belongs to the signed-in account. */
+async function ownAgent(id: string): Promise<Agent | null> {
+  const account = await requireAccount();
+  const agent = await getStore().getAgent(id);
+  return agent && agent.accountId === account.id ? agent : null;
+}
 
 /** Runs an action body and turns any failure into a redirect carrying the real message. */
 async function guarded(onError: (message: string) => string, body: () => Promise<void>) {
@@ -26,14 +35,16 @@ const FORM_FIELDS = ["name", "symbols", "thesis", "assumptions", "rules", "entry
  * together with everything typed, so the form can show the message without losing the text.
  */
 export async function saveAgentAction(id: string | null, _prev: AgentFormState, form: FormData): Promise<AgentFormState> {
+  const account = await requireAccount();
   const values = Object.fromEntries(FORM_FIELDS.map((f) => [f, String(form.get(f) ?? "")]));
   const parsed = parseAgentInput(formToAgentInput(form));
   if (!parsed.ok) return { error: parsed.error, values };
   try {
     if (id) {
+      if (!(await ownAgent(id))) redirect("/");
       await getStore().updateAgent(id, parsed.value);
     } else {
-      id = (await getStore().createAgent(parsed.value)).id;
+      id = (await getStore().createAgent(parsed.value, account.id)).id;
     }
   } catch (e) {
     unstable_rethrow(e);
@@ -46,6 +57,7 @@ export async function saveAgentAction(id: string | null, _prev: AgentFormState, 
 
 export async function deleteAgentAction(id: string) {
   await guarded((m) => `/agents/${id}?error=${encodeURIComponent(m)}`, async () => {
+    if (!(await ownAgent(id))) redirect("/");
     await getStore().deleteAgent(id);
   });
   revalidatePath("/");
@@ -54,7 +66,7 @@ export async function deleteAgentAction(id: string) {
 
 export async function checkNowAction(id: string) {
   await guarded((m) => `/agents/${id}?error=${encodeURIComponent(m)}`, async () => {
-    const agent = await getStore().getAgent(id);
+    const agent = await ownAgent(id);
     if (!agent) redirect("/");
     await runCheck(agent);
   });
@@ -64,6 +76,7 @@ export async function checkNowAction(id: string) {
 
 /** Seeds a worked example so the first visit shows what a finished agent looks like. */
 export async function createExampleAction() {
+  const account = await requireAccount();
   await guarded((m) => `/?error=${encodeURIComponent(m)}`, async () => {
   const agent = await getStore().createAgent({
     name: "Infosys: services growth comes back",
@@ -84,7 +97,7 @@ export async function createExampleAction() {
       { id: "r3", kind: "note", symbol: "INFY", text: "Watch the BFSI commentary on each results call" },
     ],
     entryPrices: { INFY: 1540 },
-  });
+  }, account.id);
   try {
     await runCheck(agent);
   } catch (e) {
@@ -95,4 +108,39 @@ export async function createExampleAction() {
   revalidatePath("/");
   redirect(`/agents/${agent.id}`);
   });
+}
+
+// ---- Accounts -------------------------------------------------------------
+
+/** First visitor becomes the owner and takes over any agents made before sign-in existed. */
+export async function claimWorkspaceAction(form: FormData) {
+  const store = getStore();
+  if ((await store.listAccounts()).length > 0) redirect("/welcome");
+  const name = String(form.get("name") ?? "").trim() || "Owner";
+  const account = await store.createAccount(name.slice(0, 60), "owner", newToken());
+  await store.adoptUnownedAgents(account.id);
+  await setSession(account.token);
+  redirect("/members?welcome=1");
+}
+
+export async function inviteMemberAction(form: FormData) {
+  await requireOwner();
+  const name = String(form.get("name") ?? "").trim().slice(0, 60);
+  if (!name) redirect("/members?error=" + encodeURIComponent("Give the invite a name so you know whose link it is."));
+  await getStore().createAccount(name, "member", newToken());
+  revalidatePath("/members");
+  redirect("/members");
+}
+
+export async function removeMemberAction(id: string) {
+  const owner = await requireOwner();
+  if (id === owner.id) redirect("/members");
+  await getStore().deleteAccount(id);
+  revalidatePath("/members");
+  redirect("/members");
+}
+
+export async function signOutAction() {
+  if (await currentAccount()) await clearSession();
+  redirect("/welcome");
 }

@@ -212,6 +212,7 @@ form.agent .hint { color: var(--ink-2); font-size: 13.5px; margin-top: -6px; }
 .field input:focus, .field textarea:focus { border-color: var(--accent); outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 20%, transparent); }
 .field textarea { min-height: 84px; resize: vertical; line-height: 1.5; }
 .field textarea.mono { font-family: var(--font-mono); font-size: 13.5px; }
+.mono { font-family: var(--font-mono); }
 .form-error { border: 1px solid var(--broken); background: var(--broken-bg); color: var(--broken); border-radius: 8px; padding: 10px 14px; font-size: 14px; }
 .two { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 @media (max-width: 640px) { .two { grid-template-columns: 1fr; } }

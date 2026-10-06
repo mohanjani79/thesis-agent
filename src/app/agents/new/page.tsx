@@ -1,7 +1,11 @@
 import { saveAgentAction } from "@/app/actions";
 import { AgentForm } from "../form";
+import { requireAccount } from "@/lib/auth";
 
-export default function NewAgent() {
+export const dynamic = "force-dynamic";
+
+export default async function NewAgent() {
+  await requireAccount();
   const action = saveAgentAction.bind(null, null);
   return (
     <>

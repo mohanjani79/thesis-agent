@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { getStore } from "@/lib/store";
+import { requireAccount } from "@/lib/auth";
 import { createExampleAction } from "./actions";
 import { StatusPill, timeAgo } from "./ui";
 
@@ -9,11 +10,12 @@ export const maxDuration = 60;
 
 export default async function Home({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
   const { error } = await searchParams;
+  const account = await requireAccount();
   const store = getStore();
   let agents: Awaited<ReturnType<typeof store.listAgents>>;
   let latest: Awaited<ReturnType<typeof store.latestChecks>>;
   try {
-    [agents, latest] = await Promise.all([store.listAgents(), store.latestChecks()]);
+    [agents, latest] = await Promise.all([store.listAgents(account.id), store.latestChecks(account.id)]);
   } catch (e) {
     return (
       <div className="empty">
