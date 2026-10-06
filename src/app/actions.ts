@@ -1,47 +1,62 @@
 "use server";
 
-import { redirect } from "next/navigation";
+import { redirect, unstable_rethrow } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { getStore } from "@/lib/store";
 import { runCheck } from "@/lib/check";
 import { formToAgentInput, parseAgentInput } from "@/lib/validate";
 
+/** Runs an action body and turns any failure into a redirect carrying the real message. */
+async function guarded(onError: (message: string) => string, body: () => Promise<void>) {
+  try {
+    await body();
+  } catch (e) {
+    unstable_rethrow(e);
+    const msg = e instanceof Error ? e.message : String(e);
+    redirect(onError(msg));
+  }
+}
+
 export async function createAgentAction(form: FormData) {
   const parsed = parseAgentInput(formToAgentInput(form));
   if (!parsed.ok) redirect(`/agents/new?error=${encodeURIComponent(parsed.error)}`);
-  const agent = await getStore().createAgent(parsed.value);
-  redirect(`/agents/${agent.id}`);
+  await guarded((m) => `/agents/new?error=${encodeURIComponent(m)}`, async () => {
+    const agent = await getStore().createAgent(parsed.value);
+    redirect(`/agents/${agent.id}`);
+  });
 }
 
 export async function updateAgentAction(id: string, form: FormData) {
   const parsed = parseAgentInput(formToAgentInput(form));
   if (!parsed.ok) redirect(`/agents/${id}/edit?error=${encodeURIComponent(parsed.error)}`);
-  await getStore().updateAgent(id, parsed.value);
+  await guarded((m) => `/agents/${id}/edit?error=${encodeURIComponent(m)}`, async () => {
+    await getStore().updateAgent(id, parsed.value);
+  });
   revalidatePath(`/agents/${id}`);
   redirect(`/agents/${id}`);
 }
 
 export async function deleteAgentAction(id: string) {
-  await getStore().deleteAgent(id);
+  await guarded((m) => `/agents/${id}?error=${encodeURIComponent(m)}`, async () => {
+    await getStore().deleteAgent(id);
+  });
   revalidatePath("/");
   redirect("/");
 }
 
 export async function checkNowAction(id: string) {
-  const agent = await getStore().getAgent(id);
-  if (!agent) redirect("/");
-  try {
+  await guarded((m) => `/agents/${id}?error=${encodeURIComponent(m)}`, async () => {
+    const agent = await getStore().getAgent(id);
+    if (!agent) redirect("/");
     await runCheck(agent);
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    redirect(`/agents/${id}?error=${encodeURIComponent(msg)}`);
-  }
+  });
   revalidatePath(`/agents/${id}`);
   revalidatePath("/");
 }
 
 /** Seeds a worked example so the first visit shows what a finished agent looks like. */
 export async function createExampleAction() {
+  await guarded((m) => `/?error=${encodeURIComponent(m)}`, async () => {
   const agent = await getStore().createAgent({
     name: "Infosys: services growth comes back",
     symbols: ["INFY"],
@@ -65,9 +80,11 @@ export async function createExampleAction() {
   try {
     await runCheck(agent);
   } catch (e) {
+    unstable_rethrow(e);
     const msg = e instanceof Error ? e.message : String(e);
     redirect(`/agents/${agent.id}?error=${encodeURIComponent(msg)}`);
   }
   revalidatePath("/");
   redirect(`/agents/${agent.id}`);
+  });
 }

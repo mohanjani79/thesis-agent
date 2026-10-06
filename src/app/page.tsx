@@ -4,8 +4,11 @@ import { createExampleAction } from "./actions";
 import { StatusPill, timeAgo } from "./ui";
 
 export const dynamic = "force-dynamic";
+/** Server actions on this page call market data and Claude, so allow more than the default function time. */
+export const maxDuration = 60;
 
-export default async function Home() {
+export default async function Home({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
+  const { error } = await searchParams;
   const store = getStore();
   let agents: Awaited<ReturnType<typeof store.listAgents>>;
   let latest: Awaited<ReturnType<typeof store.latestChecks>>;
@@ -35,6 +38,12 @@ export default async function Home() {
 
   return (
     <>
+      {error && (
+        <div className="form-error" style={{ marginBottom: 16 }}>
+          The action could not be completed: {error}{" "}
+          <Link href="/setup">Open the setup check</Link>
+        </div>
+      )}
       <div className="page-head">
         <div>
           <h1>Your agents</h1>

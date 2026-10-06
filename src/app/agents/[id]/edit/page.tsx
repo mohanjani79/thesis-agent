@@ -4,6 +4,8 @@ import { updateAgentAction } from "@/app/actions";
 import { AgentForm } from "../../form";
 
 export const dynamic = "force-dynamic";
+/** Server actions on this page call market data and Claude, so allow more than the default function time. */
+export const maxDuration = 60;
 
 export default async function EditAgent({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ error?: string }> }) {
   const { id } = await params;

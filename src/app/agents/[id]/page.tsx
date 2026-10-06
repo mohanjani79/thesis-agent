@@ -5,6 +5,8 @@ import { checkNowAction, deleteAgentAction } from "@/app/actions";
 import { StatusPill, STATUS_LABEL, inr, pct, timeAgo } from "@/app/ui";
 
 export const dynamic = "force-dynamic";
+/** Server actions on this page call market data and Claude, so allow more than the default function time. */
+export const maxDuration = 60;
 
 const KIND_LABEL = { price_below: "below", price_above: "above", drop_from_entry_pct: "drop", note: "note" } as const;
 const VERDICT_LABEL = { supported: "Supported", challenged: "Challenged", no_signal: "No signal" } as const;
