@@ -74,8 +74,8 @@ Evaluate each assumption in the order given, keeping the assumption text verbati
 /** Used when no ANTHROPIC_API_KEY is set, so the app still runs end to end. */
 function rulesOnlyEvaluation(agent: Agent, news: NewsItem[]): Evaluation {
   return {
-    pillars: agent.assumptions.map((assumption) => ({ assumption, verdict: "no_signal", evidence: "Claude evaluation is off (no ANTHROPIC_API_KEY)." })),
-    summary: `Price rules were checked. ${news.length} news item(s) were collected but not read because the Claude API key is not set.`,
+    pillars: agent.assumptions.map((assumption) => ({ assumption, verdict: "no_signal", evidence: "Not checked: the Claude evaluation is not set up yet." })),
+    summary: `Your price rules were checked. ${news.length} headline${news.length === 1 ? " was" : "s were"} collected but not read, because the Claude evaluation is not set up yet.`,
     evaluator: "rules-only",
     guardFlags: [],
   };

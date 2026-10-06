@@ -1,10 +1,10 @@
 import type { CheckStatus } from "@/lib/types";
 
-const LABEL: Record<CheckStatus, string> = { intact: "Thesis intact", watch: "Watch", broken: "Thesis challenged" };
+export const STATUS_LABEL: Record<CheckStatus, string> = { intact: "Thesis intact", watch: "Watch", broken: "Thesis challenged" };
 
-export function StatusBadge({ status }: { status?: CheckStatus }) {
-  if (!status) return <span className="badge none">Unchecked</span>;
-  return <span className={`badge ${status}`}>{LABEL[status]}</span>;
+export function StatusPill({ status }: { status?: CheckStatus }) {
+  if (!status) return <span className="pill none">Not checked yet</span>;
+  return <span className={`pill ${status}`}>{STATUS_LABEL[status]}</span>;
 }
 
 export function timeAgo(iso: string): string {
@@ -17,3 +17,4 @@ export function timeAgo(iso: string): string {
 }
 
 export const inr = (n: number) => `₹${n.toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
+export const pct = (n: number) => `${n >= 0 ? "+" : ""}${n.toFixed(2)}%`;

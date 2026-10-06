@@ -5,8 +5,12 @@ export default async function NewAgent({ searchParams }: { searchParams: Promise
   const { error } = await searchParams;
   return (
     <>
-      <h1>New agent</h1>
-      <p className="muted">Write down what you believe and what would prove you wrong. The agent checks the world against it.</p>
+      <div className="page-head">
+        <div>
+          <h1>New agent</h1>
+          <p className="lede">Write down what you believe and what would prove you wrong. The agent checks the world against it every weekday.</p>
+        </div>
+      </div>
       <AgentForm action={createAgentAction} error={error} />
     </>
   );

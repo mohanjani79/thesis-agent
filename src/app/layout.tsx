@@ -10,25 +10,35 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
+      <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link
+          rel="stylesheet"
+          href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap"
+        />
+      </head>
       <body>
-        <main>
-          <div className="row" style={{ marginBottom: 16 }}>
-            <Link href="/" style={{ fontWeight: 700, color: "inherit" }}>
+        <header className="topbar">
+          <div className="topbar-inner">
+            <Link href="/" className="wordmark">
               Thesis Agent
             </Link>
-            <span className="muted">·</span>
-            <Link href="/holdings">Holdings</Link>
-            <span className="grow" />
+            <nav className="topnav">
+              <Link href="/">Agents</Link>
+              <Link href="/holdings">Holdings</Link>
+            </nav>
+            <span className="spacer" />
             <Link href="/agents/new" className="btn">
               New agent
             </Link>
           </div>
-          {children}
-          <p className="disclaimer">
-            This tool only checks facts against reasoning you wrote yourself. It does not recommend buying or selling any security
-            and is not investment advice. Market data may be delayed or simulated.
-          </p>
-        </main>
+        </header>
+        <main>{children}</main>
+        <p className="footnote">
+          Thesis Agent checks facts against reasoning you wrote yourself. It does not recommend buying or selling any security and is
+          not investment advice. Prices and headlines come from public feeds and may be delayed or simulated.
+        </p>
       </body>
     </html>
   );

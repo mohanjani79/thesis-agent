@@ -13,7 +13,12 @@ export default async function EditAgent({ params, searchParams }: { params: Prom
   const action = updateAgentAction.bind(null, id);
   return (
     <>
-      <h1>Edit {agent.name}</h1>
+      <div className="page-head">
+        <div>
+          <span className="eyebrow">Editing</span>
+          <h1 style={{ marginTop: 4 }}>{agent.name}</h1>
+        </div>
+      </div>
       <AgentForm agent={agent} action={action} error={error} />
     </>
   );
