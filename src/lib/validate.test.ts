@@ -27,3 +27,11 @@ test("rejects missing symbols", () => {
   const r = parseAgentInput({ name: "x", symbols: [] });
   assert.equal(r.ok, false);
 });
+
+test("accepts up to 30 assumptions and explains the limit in plain words", () => {
+  const many = (n: number) => Array.from({ length: n }, (_, i) => `assumption ${i + 1}`);
+  assert.equal(parseAgentInput({ name: "x", symbols: ["INFY"], assumptions: many(30) }).ok, true);
+  const r = parseAgentInput({ name: "x", symbols: ["INFY"], assumptions: many(31) });
+  assert.equal(r.ok, false);
+  if (!r.ok) assert.equal(r.error, "Assumptions: Up to 30 assumptions, one per line");
+});

@@ -4,12 +4,12 @@ import type { AgentInput } from "./types.ts";
 const symbol = z.string().trim().toUpperCase().regex(/^[A-Z0-9&-]{1,20}$/, "Use the NSE trading symbol, e.g. INFY");
 
 export const AgentInputSchema = z.object({
-  name: z.string().trim().min(1).max(80),
-  symbols: z.array(symbol).min(1).max(10),
-  thesis: z.string().trim().max(4000).default(""),
-  assumptions: z.array(z.string().trim().min(1).max(400)).max(10).default([]),
-  notes: z.string().trim().max(4000).default(""),
-  tips: z.string().trim().max(4000).default(""),
+  name: z.string().trim().min(1, "Give the agent a name").max(120, "Keep the name under 120 characters"),
+  symbols: z.array(symbol).min(1, "Add at least one NSE symbol").max(10, "Up to 10 symbols per agent"),
+  thesis: z.string().trim().max(8000, "Keep the thesis under 8,000 characters").default(""),
+  assumptions: z.array(z.string().trim().min(1).max(600, "Keep each assumption under 600 characters")).max(30, "Up to 30 assumptions, one per line").default([]),
+  notes: z.string().trim().max(8000, "Keep notes under 8,000 characters").default(""),
+  tips: z.string().trim().max(8000, "Keep tips under 8,000 characters").default(""),
   rules: z
     .array(
       z.object({
@@ -17,10 +17,10 @@ export const AgentInputSchema = z.object({
         kind: z.enum(["price_below", "price_above", "drop_from_entry_pct", "note"]),
         symbol,
         value: z.number().finite().optional(),
-        text: z.string().trim().min(1).max(400),
+        text: z.string().trim().min(1).max(600, "Keep each rule under 600 characters"),
       }),
     )
-    .max(20)
+    .max(40, "Up to 40 rules, one per line")
     .default([]),
   entryPrices: z.record(symbol, z.number().positive()).default({}),
 });
@@ -28,7 +28,12 @@ export const AgentInputSchema = z.object({
 export function parseAgentInput(data: unknown): { ok: true; value: AgentInput } | { ok: false; error: string } {
   const r = AgentInputSchema.safeParse(data);
   if (r.success) return { ok: true, value: r.data };
-  return { ok: false, error: r.error.issues.map((i) => `${i.path.join(".") || "input"}: ${i.message}`).join("; ") };
+  const FIELD: Record<string, string> = { name: "Agent name", symbols: "NSE symbols", thesis: "Thesis", assumptions: "Assumptions", notes: "Notes", tips: "Tips", rules: "Rules", entryPrices: "Entry prices" };
+  const seen = new Set<string>();
+  const messages = r.error.issues
+    .map((i) => `${FIELD[String(i.path[0])] ?? "Input"}: ${i.message}`)
+    .filter((m) => !seen.has(m) && seen.add(m));
+  return { ok: false, error: messages.join(". ") };
 }
 
 /** Converts the HTML form (textareas, one item per line) into AgentInput. */

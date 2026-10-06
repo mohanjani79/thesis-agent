@@ -17,22 +17,30 @@ async function guarded(onError: (message: string) => string, body: () => Promise
   }
 }
 
-export async function createAgentAction(form: FormData) {
-  const parsed = parseAgentInput(formToAgentInput(form));
-  if (!parsed.ok) redirect(`/agents/new?error=${encodeURIComponent(parsed.error)}`);
-  await guarded((m) => `/agents/new?error=${encodeURIComponent(m)}`, async () => {
-    const agent = await getStore().createAgent(parsed.value);
-    redirect(`/agents/${agent.id}`);
-  });
-}
+export type AgentFormState = { error?: string; values?: Record<string, string> };
 
-export async function updateAgentAction(id: string, form: FormData) {
+const FORM_FIELDS = ["name", "symbols", "thesis", "assumptions", "rules", "entryPrices", "notes", "tips"] as const;
+
+/**
+ * Creates (id null) or updates an agent from the form. On a validation problem it returns the error
+ * together with everything typed, so the form can show the message without losing the text.
+ */
+export async function saveAgentAction(id: string | null, _prev: AgentFormState, form: FormData): Promise<AgentFormState> {
+  const values = Object.fromEntries(FORM_FIELDS.map((f) => [f, String(form.get(f) ?? "")]));
   const parsed = parseAgentInput(formToAgentInput(form));
-  if (!parsed.ok) redirect(`/agents/${id}/edit?error=${encodeURIComponent(parsed.error)}`);
-  await guarded((m) => `/agents/${id}/edit?error=${encodeURIComponent(m)}`, async () => {
-    await getStore().updateAgent(id, parsed.value);
-  });
+  if (!parsed.ok) return { error: parsed.error, values };
+  try {
+    if (id) {
+      await getStore().updateAgent(id, parsed.value);
+    } else {
+      id = (await getStore().createAgent(parsed.value)).id;
+    }
+  } catch (e) {
+    unstable_rethrow(e);
+    return { error: e instanceof Error ? e.message : String(e), values };
+  }
   revalidatePath(`/agents/${id}`);
+  revalidatePath("/");
   redirect(`/agents/${id}`);
 }
 
