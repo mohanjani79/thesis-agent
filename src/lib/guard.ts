@@ -10,6 +10,9 @@ const ADVISORY_PATTERNS: RegExp[] = [
   /\b(target price|price target|stop[- ]?loss)\s+(of|at|is)\s+₹?\s?\d/i,
   /\b(good|great|right|best)\s+time\s+to\s+(buy|sell|enter|exit)\b/i,
   /\b(it'?s|this is)\s+a\s+(buy|sell)\b/i,
+  // Bare imperatives at the start of a sentence, common from small local models.
+  /^\s*(buy|sell|hold|exit|accumulate|trim|add more|book profits?|stay invested|remain invested|keep holding|avoid|wait for a (better|lower|higher) (price|entry|level))\b/i,
+  /\b(consider|worth|advisable to|advise(d)? to)\s+(buying|selling|exiting|holding|adding|trimming|accumulating|booking)\b/i,
 ];
 
 export interface GuardResult {

@@ -4,9 +4,21 @@ import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod";
 import type { Agent, NewsItem, PillarResult, Quote } from "./types.ts";
 import { guardAdvice } from "./guard.ts";
 import { describeAnthropicError } from "./api-error.ts";
+import { chatJson, compatConfig } from "./openai-compat.ts";
 
 // ANTHROPIC_MODEL lets the daily run use a cheaper model such as claude-haiku-4-5.
 export const MODEL = process.env.ANTHROPIC_MODEL || "claude-opus-5-5";
+
+/**
+ * Which evaluator runs. Setting LLM_BASE_URL + LLM_MODEL (an OpenAI-compatible endpoint such as
+ * Ollama or Groq) switches to it for free testing; remove them to go back to Anthropic.
+ */
+export function evaluatorChoice(): { kind: "compat"; name: string } | { kind: "anthropic"; name: string } | { kind: "none"; name: string } {
+  const compat = compatConfig();
+  if (compat) return { kind: "compat", name: `${compat.model} via ${new URL(compat.baseUrl).host}` };
+  if (process.env.ANTHROPIC_API_KEY) return { kind: "anthropic", name: MODEL };
+  return { kind: "none", name: "rules-only" };
+}
 
 const PillarSchema = z.object({
   assumption: z.string(),
@@ -85,19 +97,43 @@ function rulesOnlyEvaluation(agent: Agent, news: NewsItem[]): Evaluation {
 /** Effort levels and server-side fallbacks exist on the Claude 5 / Fable families; Haiku 4.5 rejects both. */
 const supportsEffort = (model: string) => /claude-(opus|sonnet|fable|mythos)-5/.test(model);
 
-function evaluationFailed(agent: Agent, message: string): Evaluation {
+function evaluationFailed(agent: Agent, evaluator: string, message: string): Evaluation {
   return {
     pillars: agent.assumptions.map((assumption) => ({ assumption, verdict: "no_signal", evidence: "Not checked this run." })),
-    summary: `The Claude evaluation failed, so only your price rules were checked. ${message}`,
-    evaluator: `${MODEL} (failed)`,
+    summary: `The evaluation failed, so only your price rules were checked. ${message}`,
+    evaluator: `${evaluator} (failed)`,
     guardFlags: [],
   };
 }
 
+/** Strips anything advisory from the model output and records what was removed. */
+function finish(out: z.infer<typeof EvaluationSchema>, evaluator: string): Evaluation {
+  const guardFlags: string[] = [];
+  const summary = guardAdvice(out.summary);
+  guardFlags.push(...summary.flags);
+  const pillars = out.pillars.map((p) => {
+    const g = guardAdvice(p.evidence);
+    guardFlags.push(...g.flags);
+    return { ...p, evidence: g.text };
+  });
+  return { pillars, summary: summary.text, evaluator, guardFlags };
+}
+
 export async function evaluateThesis(agent: Agent, quotes: Quote[], news: NewsItem[]): Promise<Evaluation> {
-  if (!process.env.ANTHROPIC_API_KEY) return rulesOnlyEvaluation(agent, news);
+  const choice = evaluatorChoice();
+  if (choice.kind === "none") return rulesOnlyEvaluation(agent, news);
   if (agent.assumptions.length === 0) {
-    return { pillars: [], summary: "No assumptions to check yet. Add the pillars your thesis rests on.", evaluator: MODEL, guardFlags: [] };
+    return { pillars: [], summary: "No assumptions to check yet. Add the pillars your thesis rests on.", evaluator: choice.name, guardFlags: [] };
+  }
+
+  if (choice.kind === "compat") {
+    const cfg = compatConfig()!;
+    try {
+      const out = await chatJson(cfg, SYSTEM + "\n\nAnswer with JSON only.", buildPrompt(agent, quotes, news), EvaluationSchema);
+      return finish(out, choice.name);
+    } catch (e) {
+      return evaluationFailed(agent, choice.name, e instanceof Error ? e.message : String(e));
+    }
   }
 
   const client = anthropicClient();
@@ -113,7 +149,7 @@ export async function evaluateThesis(agent: Agent, quotes: Quote[], news: NewsIt
       ...(modern ? { betas: ["server-side-fallback-2026-07-01"], fallbacks: "default" } : {}),
     });
   } catch (e) {
-    return evaluationFailed(agent, describeAnthropicError(e));
+    return evaluationFailed(agent, MODEL, describeAnthropicError(e));
   }
 
   if (response.stop_reason === "refusal" || !response.parsed_output) {
@@ -125,14 +161,5 @@ export async function evaluateThesis(agent: Agent, quotes: Quote[], news: NewsIt
     };
   }
 
-  const out = response.parsed_output;
-  const guardFlags: string[] = [];
-  const summary = guardAdvice(out.summary);
-  guardFlags.push(...summary.flags);
-  const pillars = out.pillars.map((p) => {
-    const g = guardAdvice(p.evidence);
-    guardFlags.push(...g.flags);
-    return { ...p, evidence: g.text };
-  });
-  return { pillars, summary: summary.text, evaluator: MODEL, guardFlags };
+  return finish(response.parsed_output, MODEL);
 }

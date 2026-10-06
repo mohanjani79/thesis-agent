@@ -17,3 +17,9 @@ test("quoting the user's own rule is allowed", () => {
   const text = "Your rule says to revisit the position below ₹1,400, and the price is now ₹1,390.";
   assert.equal(guardAdvice(text).flags.length, 0);
 });
+
+test("strips bare imperatives and soft advice from small models", () => {
+  const r = guardAdvice("Margins held at 21%. Hold the stock and wait. It may be worth adding on dips. Guidance was unchanged.");
+  assert.equal(r.text, "Margins held at 21%. Guidance was unchanged.");
+  assert.equal(r.flags.length, 2);
+});

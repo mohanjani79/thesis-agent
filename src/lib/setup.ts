@@ -1,6 +1,7 @@
 import { getStore } from "./store.ts";
 import { createClient } from "@supabase/supabase-js";
 import { anthropicClient } from "./anthropic.ts";
+import { compatConfig, listModels } from "./openai-compat.ts";
 import { describeAnthropicError } from "./api-error.ts";
 import { normaliseSupabaseUrl } from "./supabase-url.ts";
 
@@ -77,8 +78,27 @@ export async function runSetupChecks(): Promise<SetupItem[]> {
     }
   }
 
-  // Claude
-  if (!ANTHROPIC_API_KEY) {
+  // Evaluator: an OpenAI-compatible test endpoint (Ollama, Groq) when LLM_BASE_URL is set, else Claude.
+  const compat = compatConfig();
+  if (compat) {
+    try {
+      const models = await listModels(compat);
+      const known = models.includes(compat.model);
+      items.push({
+        name: "Thesis evaluation",
+        state: known || models.length === 0 ? "ok" : "warn",
+        detail: `Test mode: ${compat.model} via ${compat.baseUrl}. Anthropic is not used while LLM_BASE_URL is set.${known ? "" : models.length ? ` The endpoint lists ${models.slice(0, 8).join(", ")}${models.length > 8 ? ", …" : ""}, not ${compat.model}.` : ""}`,
+        fix: known || models.length === 0 ? undefined : `Set LLM_MODEL to one of the listed models, or pull it (ollama pull ${compat.model}).`,
+      });
+    } catch (e) {
+      items.push({
+        name: "Thesis evaluation",
+        state: "fail",
+        detail: `LLM_BASE_URL ${compat.baseUrl} did not answer (${e instanceof Error ? e.message : String(e)}).`,
+        fix: "A local Ollama is only reachable from the same machine. For the Vercel site use a public endpoint such as https://ollama.com/v1 with LLM_API_KEY, or remove LLM_BASE_URL to use Anthropic.",
+      });
+    }
+  } else if (!ANTHROPIC_API_KEY) {
     items.push({
       name: "Claude evaluation",
       state: "warn",

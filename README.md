@@ -26,6 +26,14 @@ unofficial feeds; simulated prices fill in if Yahoo is unreachable), and skips t
 cheaper daily run. A key created at organisation level (outside a workspace) also needs `ANTHROPIC_WORKSPACE_ID`.
 `MARKET_PROVIDER=mock` switches to fully simulated data.
 
+## Free testing with Ollama or another OpenAI-compatible model
+
+Set `LLM_BASE_URL` and `LLM_MODEL` (plus `LLM_API_KEY` if the endpoint needs one) and the evaluation
+runs there instead of Anthropic; unset them to switch back. Locally: `ollama pull llama3.2`, then
+`LLM_BASE_URL=http://localhost:11434/v1 LLM_MODEL=llama3.2 npm run dev`. For the deployed site a
+laptop's Ollama is not reachable, so use a hosted endpoint such as `https://ollama.com/v1` with a key.
+Small models follow the no-advice rules less reliably; the advice guard still strips what slips through.
+
 ## Sign-in and friends
 
 Access is by personal link, so nothing has to send email. The first visitor to `/welcome` claims the
