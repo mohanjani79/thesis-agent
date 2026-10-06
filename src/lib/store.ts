@@ -3,6 +3,7 @@ import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import type { Agent, AgentInput, Check } from "./types.ts";
+import { normaliseSupabaseUrl } from "./supabase-url.ts";
 
 // Storage: Supabase when SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are set,
 // otherwise a JSON file under .data/ for local development. Vercel's file
@@ -234,7 +235,8 @@ let store: Store | undefined;
 
 export function getStore(): Store {
   if (!store) {
-    const { SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY } = process.env;
+    const SUPABASE_URL = normaliseSupabaseUrl(process.env.SUPABASE_URL);
+    const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
     store =
       SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY
         ? new SupabaseStore(createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } }))

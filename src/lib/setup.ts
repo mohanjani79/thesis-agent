@@ -1,4 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
+import { normaliseSupabaseUrl } from "./supabase-url.ts";
 
 export type CheckState = "ok" | "warn" | "fail";
 export interface SetupItem {
@@ -11,8 +12,9 @@ export interface SetupItem {
 /** Checks each piece of configuration and reports it in plain language. Never throws. */
 export async function runSetupChecks(): Promise<SetupItem[]> {
   const items: SetupItem[] = [];
-  const { SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, ANTHROPIC_API_KEY, ANTHROPIC_MODEL, MARKET_PROVIDER, KITE_API_KEY, KITE_ACCESS_TOKEN, CRON_SECRET } =
-    process.env;
+  const { ANTHROPIC_API_KEY, ANTHROPIC_MODEL, MARKET_PROVIDER, KITE_API_KEY, KITE_ACCESS_TOKEN, CRON_SECRET } = process.env;
+  const SUPABASE_URL = normaliseSupabaseUrl(process.env.SUPABASE_URL);
+  const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
 
   // Database
   if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
