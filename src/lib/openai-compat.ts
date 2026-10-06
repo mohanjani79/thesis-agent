@@ -12,10 +12,24 @@ export interface CompatConfig {
 
 /** Returns the config when LLM_BASE_URL and LLM_MODEL are set, else null. */
 export function compatConfig(env: Record<string, string | undefined> = process.env): CompatConfig | null {
-  const baseUrl = env.LLM_BASE_URL?.trim().replace(/\/+$/, "");
+  const baseUrl = normaliseBaseUrl(env.LLM_BASE_URL);
   const model = env.LLM_MODEL?.trim();
   if (!baseUrl || !model) return null;
   return { baseUrl, apiKey: env.LLM_API_KEY?.trim() || undefined, model };
+}
+
+/** Accepts a bare host, a missing scheme, or a pasted /chat/completions URL and returns the /v1 base. */
+export function normaliseBaseUrl(raw: string | undefined): string | null {
+  let s = (raw ?? "").trim();
+  if (!s) return null;
+  if (!/^https?:\/\//i.test(s)) s = (/^(localhost|127\.0\.0\.1)/.test(s) ? "http://" : "https://") + s;
+  s = s.replace(/\/+$/, "").replace(/\/(chat\/completions|models)$/i, "");
+  try {
+    new URL(s);
+  } catch {
+    return null;
+  }
+  return s;
 }
 
 function headersFor(cfg: CompatConfig): Record<string, string> {

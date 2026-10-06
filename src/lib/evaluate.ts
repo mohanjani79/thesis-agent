@@ -15,7 +15,7 @@ export const MODEL = process.env.ANTHROPIC_MODEL || "claude-opus-5-5";
  */
 export function evaluatorChoice(): { kind: "compat"; name: string } | { kind: "anthropic"; name: string } | { kind: "none"; name: string } {
   const compat = compatConfig();
-  if (compat) return { kind: "compat", name: `${compat.model} via ${new URL(compat.baseUrl).host}` };
+  if (compat) return { kind: "compat", name: `${compat.model} via ${compat.baseUrl.replace(/^https?:\/\//, "").split("/")[0]}` };
   if (process.env.ANTHROPIC_API_KEY) return { kind: "anthropic", name: MODEL };
   return { kind: "none", name: "rules-only" };
 }
