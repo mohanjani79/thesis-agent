@@ -24,22 +24,34 @@ function headersFor(cfg: CompatConfig): Record<string, string> {
   return h;
 }
 
-/** Asks for JSON matching `schema` and validates it. Throws with a readable message on any failure. */
+/**
+ * Asks for JSON matching `schema` and validates it. Tries strict JSON-schema output first; if the
+ * endpoint rejects that (Groq only supports it on some models), retries in plain JSON mode with the
+ * schema spelled out in the prompt. Throws with a readable message on any failure.
+ */
 export async function chatJson<T extends z.ZodType>(cfg: CompatConfig, system: string, user: string, schema: T, timeoutMs = 90_000): Promise<z.infer<T>> {
-  const body = {
-    model: cfg.model,
-    temperature: 0,
+  const jsonSchema = z.toJSONSchema(schema);
+  const base = { model: cfg.model, temperature: 0 };
+  const strict = {
+    ...base,
     messages: [
       { role: "system", content: system },
       { role: "user", content: user },
     ],
-    response_format: { type: "json_schema", json_schema: { name: "evaluation", strict: true, schema: z.toJSONSchema(schema) } },
+    response_format: { type: "json_schema", json_schema: { name: "evaluation", strict: true, schema: jsonSchema } },
   };
-  let res: Response;
-  try {
-    res = await fetch(`${cfg.baseUrl}/chat/completions`, { method: "POST", headers: headersFor(cfg), body: JSON.stringify(body), signal: AbortSignal.timeout(timeoutMs) });
-  } catch (e) {
-    throw new Error(`Could not reach ${cfg.baseUrl} (${e instanceof Error ? e.message : String(e)})`);
+  const loose = {
+    ...base,
+    messages: [
+      { role: "system", content: `${system}\n\nRespond with a single JSON object matching this JSON schema and nothing else:\n${JSON.stringify(jsonSchema)}` },
+      { role: "user", content: user },
+    ],
+    response_format: { type: "json_object" },
+  };
+
+  let res = await post(cfg, strict, timeoutMs);
+  if (res.status === 400 && /response_format|json_schema|structured/i.test(await res.clone().text())) {
+    res = await post(cfg, loose, timeoutMs);
   }
   if (!res.ok) {
     const text = (await res.text().catch(() => "")).slice(0, 300);
@@ -59,6 +71,14 @@ export async function chatJson<T extends z.ZodType>(cfg: CompatConfig, system: s
   const r = schema.safeParse(parsed);
   if (!r.success) throw new Error(`The model's JSON did not match the expected shape (${r.error.issues[0]?.message ?? "unknown"})`);
   return r.data;
+}
+
+async function post(cfg: CompatConfig, body: unknown, timeoutMs: number): Promise<Response> {
+  try {
+    return await fetch(`${cfg.baseUrl}/chat/completions`, { method: "POST", headers: headersFor(cfg), body: JSON.stringify(body), signal: AbortSignal.timeout(timeoutMs) });
+  } catch (e) {
+    throw new Error(`Could not reach ${cfg.baseUrl} (${e instanceof Error ? e.message : String(e)})`);
+  }
 }
 
 /** Lists model ids the endpoint offers, for the setup page. */
