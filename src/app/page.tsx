@@ -7,7 +7,26 @@ export const dynamic = "force-dynamic";
 
 export default async function Home() {
   const store = getStore();
-  const [agents, latest] = await Promise.all([store.listAgents(), store.latestChecks()]);
+  let agents: Awaited<ReturnType<typeof store.listAgents>>;
+  let latest: Awaited<ReturnType<typeof store.latestChecks>>;
+  try {
+    [agents, latest] = await Promise.all([store.listAgents(), store.latestChecks()]);
+  } catch (e) {
+    return (
+      <div className="empty">
+        <h2>The database is not ready</h2>
+        <p className="lede">Agents could not be loaded. The setup page checks the database connection and says exactly what to fix.</p>
+        <p className="small muted" style={{ fontFamily: "var(--font-mono)" }}>
+          {e instanceof Error ? e.message : String(e)}
+        </p>
+        <div className="actions">
+          <Link href="/setup" className="btn">
+            Open setup check
+          </Link>
+        </div>
+      </div>
+    );
+  }
   const counts = { intact: 0, watch: 0, broken: 0 };
   for (const a of agents) {
     const s = latest[a.id]?.status;
